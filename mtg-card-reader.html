@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Title reader for Magic cards</title>
+<style>
+:root{--ink:#16202a;--mist:#e9edf0;--paper:#fff;--line:#cdd5db;--mute:#46535f;--ok:#1b6b3c;--warn:#8f5200;--bad:#a52a22;color-scheme:light dark;
+--wubrg:linear-gradient(90deg,#f1e8c6 0 20%,#2f7fc1 20% 40%,#3b3340 40% 60%,#d3452f 60% 80%,#2f8a55 80%)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--mist);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;padding-bottom:150px}
+header{background:var(--paper);border-bottom:1px solid var(--line);border-top:6px solid;border-image:var(--wubrg) 1;padding:18px 16px 16px}
+h1{font:700 28px/1.1 Georgia,'Times New Roman',serif;margin:0 0 6px}
+header p{margin:0;color:var(--mute);max-width:46ch;font-size:16px}
+main{max-width:760px;margin:0 auto;padding:14px 12px}
+.pick{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border:1px solid var(--ink);background:var(--paper);color:var(--ink);border-radius:8px;font:600 15px system-ui,sans-serif;cursor:pointer;text-decoration:none}
+.btn.pri{background:var(--ink);color:#fff}
+.btn[disabled]{opacity:.45;cursor:default}
+.btn:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #2f7fc1;outline-offset:2px}
+#status{min-height:24px;margin:12px 0 6px;color:var(--ink);font-size:15px}
+#bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:12px}
+#bar i{display:block;height:100%;width:0;background:var(--wubrg);transition:width .25s}
+#err{background:#fbeceb;border:1px solid #e3b3af;color:#7d241e;padding:10px 12px;border-radius:8px;margin-bottom:12px}
+.stage{position:relative;touch-action:auto;cursor:crosshair;line-height:0}
+.stage.draw{touch-action:none;outline:3px solid #2f7fc1;outline-offset:2px}
+.stage canvas{width:100%;height:auto;border-radius:6px}
+#sel{position:absolute;border:2px solid #d3452f;background:rgba(211,69,47,.18);pointer-events:none}
+.card{display:grid;grid-template-columns:92px 1fr;gap:12px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+.card.sel{box-shadow:0 0 0 3px #d81bbd}
+.card.confirmed{border-color:var(--ok);border-width:2px}
+.btn.cf.on{background:var(--ok);color:var(--paper);border-color:var(--ok)}
+.card.low{border-color:var(--warn);border-width:2px}
+.card.none,.card.err{border-color:var(--bad);border-width:2px}
+.th{background:var(--mist);border-radius:6px;display:flex;align-items:flex-start}
+.th img{width:100%;border-radius:6px;display:block}
+.top{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:700}
+.badge.ok{color:var(--ok)}.badge.low{color:var(--warn)}.badge.none,.badge.err{color:var(--bad)}
+.pct,.ocr,.meta{color:var(--mute);font-size:14px}
+.ocr{display:block;word-break:break-word}
+.nm{width:100%;min-height:44px;margin:6px 0 4px;padding:0 10px;background:var(--paper);border:1px solid var(--mute);border-radius:8px;font:600 17px Georgia,serif;color:var(--ink)}
+.dbg{display:block;max-width:100%;height:34px;object-fit:contain;object-position:left;background:#fff;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.acts .btn{min-height:38px;padding:0 12px;font-size:14px}
+#photo{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:12px}
+.phead{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:15px}
+.phead .btn{min-height:36px}
+#ov{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.card.focus{box-shadow:0 0 0 3px #2f7fc1}
+.num{display:inline-block;min-width:24px;padding:0 7px;margin-right:8px;border-radius:12px;background:var(--ink);color:var(--paper);text-align:center}
+.edit{display:block;margin-top:6px;font-size:13px;color:var(--mute)}
+#export{position:fixed;left:0;right:0;bottom:0;background:var(--paper);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+#export>div{max-width:760px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#export select{min-height:44px;border:1px solid var(--ink);border-radius:8px;padding:0 8px;background:var(--paper);font-size:15px}
+#export label{font-size:15px;display:flex;gap:6px;align-items:center;color:var(--ink)}
+#count{flex-basis:100%;font-size:14px;color:var(--mute)}
+@media(min-width:600px){.card{grid-template-columns:120px 1fr}}
+@media(prefers-color-scheme:dark){:root{--ink:#f2f6f9;--mist:#0f151a;--paper:#1c252e;--line:#3d4b58;--mute:#c0ccd6;--ok:#6fdc9a;--warn:#f5b95c;--bad:#ff958b}.btn{border-color:#8fa1b0}.btn.pri{border-color:#f2f6f9}.nm{border-color:#8fa1b0}.btn.pri{background:#e8edf1;color:#12181e}#err{background:#3a1d1b;color:#f2c3bf;border-color:#6d3430}}
+@media(min-width:960px){main{max-width:1240px}.work{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}#photo{position:sticky;top:12px;margin-bottom:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Title reader</h1>
+  <p>Photograph your Magic cards. Titles are read on this device and matched against Scryfall's card list.</p>
+</header>
+<main>
+  <div class="pick">
+    <label class="btn pri">Take photo<input id="cam" type="file" accept="image/*" capture="environment" hidden></label>
+    <label class="btn">Choose image<input id="file" type="file" accept="image/*" hidden></label>
+    <button class="btn" id="manualBtn" disabled>Draw a title box</button>
+  </div>
+  <div id="status" role="status"></div>
+  <div id="bar"><i></i></div>
+  <div id="err" role="alert" hidden></div>
+  <div class="work">
+    <section id="photo" hidden>
+      <div class="phead"><span id="phelp"></span><button class="btn" id="pcancel" hidden>Cancel</button></div>
+      <div class="stage" id="stage"><canvas id="src"></canvas><canvas id="ov"></canvas><div id="sel" hidden></div></div>
+    </section>
+    <section id="list"></section>
+  </div>
+  <datalist id="dl"></datalist>
+</main>
+<footer id="export" hidden>
+  <div>
+    <select id="fmt" aria-label="File format">
+      <option value="csv">CSV</option><option value="txt">Plain text deck list</option><option value="json">JSON</option>
+    </select>
+    <button class="btn pri" id="dlBtn">Download</button>
+    <button class="btn" id="cpBtn">Copy list</button>
+    <label><input type="checkbox" id="inc"> Include unmatched</label>
+    <label><input type="checkbox" id="onlyc"> Only confirmed</label>
+    <span id="count"></span>
+  </div>
+</footer>
+
+<script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+let cards=[],srcC=null,nid=0,target=null,queue=Promise.resolve();
+let names=[],keys=[],owners=[],nameMap=new Map(),namesReady=Promise.resolve();
+const sfCache=new Map();let covered=[],marks=[],taken=[];
+
+/* ---------- Scryfall (rate-limited ~100ms) ---------- */
+let gate=Promise.resolve();
+const sf=url=>{const p=gate.then(()=>fetch(url,{headers:{Accept:'application/json;q=0.9,*/*;q=0.8'}}));
+  gate=p.catch(()=>{}).then(()=>new Promise(r=>setTimeout(r,100)));return p};
+async function scry(name){
+  const k=name.toLowerCase();if(sfCache.has(k))return sfCache.get(k);
+  const r=await sf('https://api.scryfall.com/cards/named?exact='+encodeURIComponent(name));
+  if(r.status===404)return null;
+  if(!r.ok)throw new Error('Scryfall returned '+r.status);
+  const d=await r.json();sfCache.set(k,d);return d}
+
+/* ---------- Name list: IndexedDB cache + fuzzy match ---------- */
+const idb=(m,k,v)=>new Promise((res,rej)=>{const o=indexedDB.open('mtg-scan',1);
+  o.onupgradeneeded=()=>o.result.createObjectStore('kv');
+  o.onsuccess=()=>{const s=o.result.transaction('kv',m==='get'?'readonly':'readwrite').objectStore('kv');
+    const r=m==='get'?s.get(k):s.put(v,k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)};
+  o.onerror=()=>rej(o.error)});
+const norm=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+async function loadNames(){
+  if(names.length)return;
+  let c=await idb('get','names').catch(()=>null);
+  if(!c||Date.now()-c.t>7*864e5){
+    try{status('Downloading the card name list (first run only)…');
+      const r=await sf('https://api.scryfall.com/catalog/card-names');
+      if(!r.ok)throw 0;const d=await r.json();c={t:Date.now(),names:d.data};
+      idb('put','names',c).catch(()=>{});
+    }catch(e){if(!c)throw new Error("Couldn't download Scryfall's card name list. Check your connection and try again.")}}
+  names=c.names;
+  for(const n of names){const k=norm(n);keys.push(k);owners.push(n);nameMap.set(k,n);
+    if(n.includes(' // ')){const f=norm(n.split(' // ')[0]);keys.push(f);owners.push(n);if(!nameMap.has(f))nameMap.set(f,n)}}}
+function lev(a,b,max){
+  if(Math.abs(a.length-b.length)>max)return max+1;
+  let p=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){const c=[i];let mn=i;
+    for(let j=1;j<=b.length;j++){const v=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));c[j]=v;if(v<mn)mn=v}
+    if(mn>max)return max+1;p=c}
+  return p[b.length]}
+function match(text,lim){
+  const q=norm(text);if(q.length<2||!keys.length)return null;
+  const ex=nameMap.get(q);if(ex)return{name:ex,score:1};
+  let best=Math.min(q.length,Math.ceil(q.length*(lim||1))),bi=-1;
+  for(let i=0;i<keys.length;i++){const d=lev(q,keys[i],best);if(d<best||(d===best&&bi<0)){best=d;bi=i;if(d===0)break}}
+  if(bi<0)return null;
+  let res={name:owners[bi],score:Math.max(0,1-best/Math.max(q.length,keys[bi].length))};
+  if(res.score<.7&&q.length>=5){let pk=-1;
+    for(let i=0;i<keys.length;i++)if(keys[i].startsWith(q)&&(pk<0||keys[i].length<keys[pk].length))pk=i;
+    if(pk>=0){const ps=Math.min(.79,.6+.2*q.length/keys[pk].length);if(ps>res.score)res={name:owners[pk],score:ps}}}
+  return res}
+
+/* ---------- Image loading ---------- */
+async function loadImage(file){
+  const bmp=await createImageBitmap(file).catch(()=>null);
+  if(!bmp)throw new Error("That file couldn't be read as an image. Try a JPG or PNG.");
+  const k=Math.min(1,2000/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');
+  c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);return c}
+
+/* ---------- OpenCV: detect, warp, binarize ---------- */
+const cvReady=new Promise((res,rej)=>{let n=0;(function chk(){
+  if(window.cv&&cv.Mat)return res();
+  if(window.cv&&typeof cv.then==='function'){cv.then(m=>{window.cv=m;res()});return}
+  if(++n>600)return rej(new Error('OpenCV.js did not load. Check your connection and reload.'));
+  setTimeout(chk,100)})()});
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+const lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+const inQ=(p,q)=>{let s=0;for(let i=0;i<4;i++){const a=q[i],b=q[(i+1)%4],c=(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]);
+  if(c){if(s&&Math.sign(c)!==s)return false;s=Math.sign(c)}}return true};
+function order(P){const s=P.map(p=>p[0]+p[1]),d=P.map(p=>p[1]-p[0]);
+  return[P[s.indexOf(Math.min(...s))],P[d.indexOf(Math.min(...d))],P[s.indexOf(Math.max(...s))],P[d.indexOf(Math.max(...d))]]}
+function detect(src){
+  const m=cv.imread(src),g=new cv.Mat(),e=new cv.Mat(),cs=new cv.MatVector(),h=new cv.Mat(),k=cv.Mat.ones(3,3,cv.CV_8U),found=[];
+  try{
+    cv.cvtColor(m,g,cv.COLOR_RGBA2GRAY);cv.GaussianBlur(g,g,new cv.Size(5,5),0);
+    const minA=src.width*src.height*.005;
+    for(const[lo,hi] of [[50,150],[20,60]]){
+    cv.Canny(g,e,lo,hi);cv.dilate(e,e,k);
+    cv.findContours(e,cs,h,cv.RETR_LIST,cv.CHAIN_APPROX_SIMPLE);
+    for(let i=0;i<cs.size();i++){const c=cs.get(i),a=cv.contourArea(c);
+      if(a>=minA){
+        let P=null;const ap=new cv.Mat();cv.approxPolyDP(c,ap,.02*cv.arcLength(c,true),true);
+        if(ap.rows===4&&cv.isContourConvex(ap)){const d=ap.data32S;P=[[d[0],d[1]],[d[2],d[3]],[d[4],d[5]],[d[6],d[7]]]}
+        else{const r=cv.minAreaRect(c);if(a/(r.size.width*r.size.height||1)>=.8)P=cv.RotatedRect.points(r).map(p=>[p.x,p.y])}
+        ap.delete();
+        if(P){
+          let[tl,tr,br,bl]=order(P),w=dist(tl,tr),ht=dist(tl,bl),r=w/ht,vx=1,vy=1,part=false;
+          const vis=[tl,tr,br,bl];
+          if(r>1.23&&r<1.57){[tl,tr,br,bl]=[bl,tl,tr,br];[w,ht]=[ht,w];r=w/ht}   /* full card lying sideways */
+          if(r>=.816){const f=w*88/63/ht;bl=lerp(tl,bl,f);br=lerp(tr,br,f);vy=1/f;part=true}   /* bottom hidden */
+          else if(r<.616){const f=ht*63/88/w;tr=lerp(tl,tr,f);br=lerp(bl,br,f);vx=1/f;part=true}   /* right side hidden */
+          if(r>=.1&&r<=7)found.push({p:[tl,tr,br,bl],vis,a,vx,vy,part,cx:(vis[0][0]+vis[2][0])/2,cy:(vis[0][1]+vis[2][1])/2})}}
+      c.delete()}}
+    const inside=(o,f)=>inQ([o.cx,o.cy],f.vis);
+    const cand=found.filter(f=>!(f.part&&found.filter(o=>o!==f&&inside(o,f)).length>=2))
+      .sort((x,y)=>(x.part-y.part)||(y.a-x.a));
+    const keep=[];for(const f of cand)if(!keep.some(q=>inside(f,q)))keep.push(f);
+    keep.sort((x,y)=>Math.abs(x.cy-y.cy)>.4*Math.sqrt(x.a)?x.cy-y.cy:x.cx-y.cx);
+    return keep.map(f=>{const H=Math.max(700,Math.min(1400,Math.round((dist(f.p[0],f.p[3])+dist(f.p[1],f.p[2]))/2))),W=Math.round(H*63/88),d=new cv.Mat(),
+      S=cv.matFromArray(4,1,cv.CV_32FC2,f.p.flat()),D=cv.matFromArray(4,1,cv.CV_32FC2,[0,0,W,0,W,H,0,H]),
+      M=cv.getPerspectiveTransform(S,D);cv.warpPerspective(m,d,M,new cv.Size(W,H));
+      const o=document.createElement('canvas');cv.imshow(o,d);o.vx=f.vx;o.vy=f.vy;o.partial=f.part;o.vis=f.vis;[d,S,D,M].forEach(x=>x.delete());return o});
+  }finally{[m,g,e,cs,h,k].forEach(x=>x.delete())}}
+function titleBoxes(c){const W=c.width,H=c.height,vx=c.vx||1,vy=c.vy||1;return[[.055,.035,.665,.07],[.055,.028,.665,.09],[.055,.045,.665,.055]].map(([x,y,w,h])=>({x:W*x,y:H*y,w:W*Math.max(.1,Math.min(w,vx-x-.02)),h:H*Math.max(.03,Math.min(h,vy-y-.005))}))}
+function strip(c,b,rot,flip,mode){
+  let{x,y,w,h}=b;if(flip){x=c.width-x-w;y=c.height-y-h}
+  const S=Math.min(3,Math.max(1.5,110/h),1800/w),t=document.createElement('canvas');
+  t.width=Math.round(w*S);t.height=Math.round(h*S);
+  const g=t.getContext('2d');if(rot){g.translate(t.width,t.height);g.rotate(Math.PI)}
+  if(b.ang){g.fillStyle="#fff";g.fillRect(0,0,t.width,t.height);g.translate(t.width/2,t.height/2);g.rotate(-b.ang);g.scale(S,S);g.drawImage(c,-(x+w/2),-(y+h/2))}else g.drawImage(c,x,y,w,h,0,0,t.width,t.height);
+  return bin(t,mode)}
+function bin(t,mode){  /* 0: contrast-stretched gray, 1: Otsu, 2: adaptive, 3: light text on dark */
+  let m=cv.imread(t);const o=new cv.Mat();
+  if(mode===3){const ch=new cv.MatVector(),r=new cv.Mat();cv.split(m,ch);const a=ch.get(0),b=ch.get(1),c=ch.get(2);
+    cv.min(a,b,r);cv.min(r,c,r);[a,b,c,ch,m].forEach(x=>x.delete());m=r;cv.threshold(m,m,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)}
+  else{cv.cvtColor(m,m,cv.COLOR_RGBA2GRAY);
+    if(mode===1)cv.threshold(m,m,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU);
+    else if(mode===2){cv.GaussianBlur(m,m,new cv.Size(3,3),0);cv.adaptiveThreshold(m,m,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY,31,12)}
+    else cv.normalize(m,m,0,255,cv.NORM_MINMAX)}
+  if(cv.mean(m)[0]<127)cv.bitwise_not(m,m);
+  cv.copyMakeBorder(m,o,14,14,14,14,cv.BORDER_CONSTANT,new cv.Scalar(255,255,255,255));
+  const out=document.createElement('canvas');cv.imshow(out,o);m.delete();o.delete();return out}
+
+/* ---------- Tesseract ---------- */
+let wk=null;
+function worker(){return wk||(wk=Tesseract.createWorker('eng',1,{logger:m=>{
+    if(m.status&&m.status.startsWith('loading'))status('Loading OCR engine… '+Math.round((m.progress||0)*100)+'%')}})
+  .then(async w=>{await w.setParameters({tessedit_pageseg_mode:Tesseract.PSM.SINGLE_LINE,user_defined_dpi:'300',tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',-: "});return w}))}
+const clean=t=>t.replace(/[\r\n]+/g,' ').replace(/[^A-Za-zÀ-ÿ',\-: ]/g,'').replace(/\s+/g,' ').trim();
+
+/* ---------- Card pipeline ---------- */
+const thumbOf=c=>{const t=document.createElement('canvas'),sw=c.width*(c.vx||1),sh=c.height*(c.vy||1),k=Math.min(1,320/sw);t.width=sw*k;t.height=sh*k;t.getContext('2d').drawImage(c,0,0,sw,sh,0,0,t.width,t.height);return t.toDataURL('image/jpeg',.75)};
+function addCard(canvas,shape){
+  const card={shape,id:++nid,thumb:thumbOf(canvas),status:'wait',msg:'Waiting…',ocr:'',name:'',score:0,scry:null,url:''};
+  cards.push(card);mk(card);paint(card);return card}
+function bestMatch(t,lim){
+  const w=t.split(' '),c=[t];
+  if(w.length>1){const a=w[0].length<=2,z=w[w.length-1].length<=2;
+    if(a)c.push(w.slice(1).join(' '));if(z)c.push(w.slice(0,-1).join(' '));if(a&&z&&w.length>2)c.push(w.slice(1,-1).join(' '))}
+  let b={txt:t,m:null};
+  for(const x of c){const m=match(x,lim);if(m&&(!b.m||m.score>b.m.score))b={txt:x,m}}
+  return b}
+function drop(card){if(selected===card)selected=null;cards=cards.filter(c=>c!==card);const el=$('c'+card.id);if(el)el.remove();cards.forEach(paint);progress();exportBar();drawOv()}
+async function analyze(card,src,boxes,auto,keep){
+  card.status='ocr';
+  try{
+    await namesReady.catch(()=>{});
+    const w=await worker();let best=null;
+    const attempt=async(rot,bi,mode)=>{
+      card.msg='Reading title…';paint(card);
+      const img=strip(src,boxes[bi],rot,auto&&rot,mode),{data}=await w.recognize(img);
+      const r=bestMatch(clean(data.text)),sc=r.m?r.m.score:0;
+      if(!best||sc>best.sc||(sc===best.sc&&data.confidence>best.conf))best={txt:r.txt,m:r.m,sc,conf:data.confidence,rot,dbg:img.toDataURL()}};
+    outer:for(const rot of src.partial?[0]:[0,180])for(const mode of [0,1]){await attempt(rot,0,mode);if(best.sc>=.93)break outer}
+    for(let bi=1;bi<boxes.length&&best.sc<.85;bi++)for(const mode of [0,1,2]){await attempt(best.rot,bi,mode);if(best.sc>=.85)break}
+    if(best.sc<.6)await attempt(best.rot,0,3);
+    if(auto&&!keep&&best.sc<.5){drop(card);return}
+    card.ocr=best.txt;card.dbg=best.dbg;
+    await resolve(card,best.m?best.m.name:null,best.sc);
+  }catch(e){card.status='err';card.msg=e.message||'Something went wrong reading this card';paint(card)}}
+async function resolve(card,name,score){
+  if(!name){card.confirmed=false;card.name=card.ocr;card.scry=null;card.url='';card.score=0;card.status='none';card.msg='No match found';return paint(card)}
+  card.confirmed=false;card.name=name;card.score=score;card.status='ocr';card.msg='Looking up on Scryfall…';paint(card);
+  try{const d=await scry(name);
+    if(!d){card.scry=null;card.url='';card.status='none';card.msg='Scryfall has no card with this name'}
+    else{card.scry=d;card.name=d.name;card.url=(d.related_uris&&d.related_uris.gatherer)||'';card.status=score>=.8?'ok':'low'}
+  }catch(e){card.status='err';card.msg='Network problem while looking up the card. Edit the name or retry.'}
+  paint(card)}
+
+/* ---------- UI ---------- */
+function mk(card){
+  const el=document.createElement('article');el.className='card';el.id='c'+card.id;
+  el.innerHTML=`<div class="th"><img alt="Card ${card.id}" src="${card.thumb}"></div><div><div class="top"><span><span class="num"></span><span class="badge"></span></span><span class="pct"></span></div>
+  <span class="ocr"></span><img class="dbg" alt="What the OCR saw" title="What the OCR saw" hidden><span class="edit">Name (edit to correct, then press Look up)</span><input class="nm" list="dl" autocomplete="off" spellcheck="false" aria-label="Card name">
+  <div class="meta"></div><div class="acts"><a class="btn pri go" target="_blank" rel="noopener" hidden>View on Gatherer</a>
+  <button class="btn cf">Confirm correct</button><button class="btn lk">Look up</button><button class="btn re">Redo on photo</button><button class="btn rm">Remove</button></div></div>`;
+  const nm=el.querySelector('.nm');
+  el.addEventListener('click',e=>{if(!e.target.closest('button,a,input'))select(card)});
+  nm.onfocus=()=>select(card,true);
+  nm.oninput=()=>{const q=norm(nm.value);if(q.length<2)return;const out=[];
+    for(const n of names){if(norm(n).startsWith(q)){out.push(n);if(out.length>=10)break}}
+    if(out.length<10)for(const n of names){if(!out.includes(n)&&norm(n).includes(q)){out.push(n);if(out.length>=10)break}}
+    $('dl').innerHTML=out.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">`).join('')};
+  const apply=()=>{const v=nm.value.trim();if(!v)return;const f=nameMap.get(norm(v));
+    if(f)resolve(card,f,1);else{const m=match(v);resolve(card,m?m.name:null,m?m.score:0)}};
+  el.querySelector('.cf').onclick=()=>{if(!card.scry)return;card.confirmed=!card.confirmed;paint(card)};
+  nm.onchange=apply;el.querySelector('.lk').onclick=apply;
+  el.querySelector('.re').onclick=()=>openManual(card);
+  el.querySelector('.rm').onclick=()=>drop(card);
+  $('list').appendChild(el)}
+const LBL={ok:'Matched',low:'Check this match',none:'No match',err:'Problem'};
+function paint(card){
+  const el=$('c'+card.id);if(!el)return;
+  el.className='card '+(card.confirmed?'confirmed':['low','none','err'].includes(card.status)?card.status:'')+(card===selected?' sel':'');
+  const cf=el.querySelector('.cf');cf.disabled=!card.scry;cf.classList.toggle('on',!!card.confirmed);cf.textContent=card.confirmed?'Confirmed \u2713 (undo)':'Confirm correct';
+  el.querySelector('.num').textContent=cards.indexOf(card)+1;
+  const b=el.querySelector('.badge');b.className='badge '+(card.confirmed?'ok':card.status);
+  b.textContent=card.confirmed?'Confirmed':LBL[card.status]||card.msg;
+  el.querySelector('.pct').textContent=card.scry?Math.round(card.score*100)+'% match':'';
+  el.querySelector('.ocr').textContent=card.ocr?'Read as: '+card.ocr:(card.status==='none'?'Nothing readable in the title area':'');
+  const nm=el.querySelector('.nm');if(document.activeElement!==nm)nm.value=card.name||'';
+  const dg=el.querySelector('.dbg');dg.hidden=!card.dbg;if(card.dbg)dg.src=card.dbg;
+  const s=card.scry;el.querySelector('.meta').textContent=card.status==='err'||card.status==='none'?card.msg:s?s.set_name+' · #'+s.collector_number+(card.url?'':' · No Gatherer page listed'):'';
+  const a=el.querySelector('.go');a.hidden=!card.url;if(card.url)a.href=card.url;
+  progress();exportBar();drawOv()}
+function progress(){
+  const n=cards.length,d=cards.filter(c=>!['wait','ocr'].includes(c.status)).length;
+  document.querySelector('#bar i').style.width=n?d/n*100+'%':'0';
+  if(n&&d<n)status(`Reading card ${d+1} of ${n}…`);else if(n&&d===n)status(`Done: ${n} card${n>1?'s':''}. Fix anything flagged, then download.`)}
+function status(t){$('status').textContent=t}
+function showErr(t){$('err').textContent=t;$('err').hidden=!t}
+
+/* ---------- Manual mode ---------- */
+let ovq=false,drawMode=false,selected=null;
+function select(card,keep){selected=(selected===card&&!keep)?null:card;cards.forEach(c=>{const e=$('c'+c.id);if(e)e.classList.toggle('sel',c===selected)});drawOv()}
+function drawOv(){
+  if(ovq||!srcC)return;ovq=true;
+  requestAnimationFrame(()=>{ovq=false;
+    const c=$('ov');if(c.width!==srcC.width||c.height!==srcC.height){c.width=srcC.width;c.height=srcC.height}
+    const g=c.getContext('2d'),u=Math.max(2,srcC.width/450),col={ok:'#22b35e',low:'#f0a020',none:'#e5483d',err:'#e5483d',conf:'#1f7ae0',sel:'#d81bbd',ocr:'#8a96a3',wait:'#8a96a3'};
+    g.clearRect(0,0,c.width,c.height);g.font=`bold ${u*7}px system-ui,sans-serif`;g.textBaseline='top';
+    [...cards.filter(c=>c!==selected),...cards.filter(c=>c===selected)].forEach(cd=>{const i=cards.indexOf(cd),sh=cd.shape;if(!sh)return;const k=cd===selected?col.sel:cd.confirmed?col.conf:(col[cd.status]||col.wait);let lx,ly;
+      g.strokeStyle=k;g.lineWidth=cd===target?u*3:cd===selected?u*3.5:u*1.4;g.setLineDash(cd===target?[u*3,u*2]:[]);g.beginPath();
+      if(sh.pts){sh.pts.forEach((q,j)=>g[j?'lineTo':'moveTo'](q[0],q[1]));g.closePath();lx=Math.min(...sh.pts.map(q=>q[0]));ly=Math.min(...sh.pts.map(q=>q[1]))}
+      else{g.save();g.translate(sh.x+sh.w/2,sh.y+sh.h/2);g.rotate(sh.ang||0);g.rect(-sh.w/2,-sh.h/2,sh.w,sh.h);g.restore();lx=sh.x;ly=sh.y}
+      if(cd===selected){g.save();g.strokeStyle='#fff';g.lineWidth=u*7;g.setLineDash([]);g.stroke();g.restore()}
+      g.stroke();
+      const t=(cd.confirmed?'\u2713 ':'')+(i+1),w=g.measureText(t).width+u*4,ty=Math.max(0,ly-u*9);
+      cd._lab={x:lx,y:ty,w,h:u*9};g.fillStyle=k;g.fillRect(lx,ty,w,u*9);g.fillStyle=k===col.low?'#111':'#fff';g.fillText(t,lx+u*2,ty+u*.9)})})}
+function setHelp(){const t=target;
+  $('phelp').textContent=drawMode?(t?`Drag a box over the title of card ${cards.indexOf(t)+1} to read it again.`:'Drag a box over a title to read it. You can add several.'):'Tap an outline to jump to its card. Use \u201cDraw a title box\u201d to add or redo one.';
+  $('pcancel').textContent=t?'Cancel':'Done';$('pcancel').hidden=!drawMode;$('stage').classList.toggle('draw',drawMode)}
+function openManual(t){if(!srcC)return;target=t||null;drawMode=true;setHelp();drawOv();$('photo').scrollIntoView({behavior:'smooth',block:'start'})}
+function focusCard(card){select(card,true);const el=$('c'+card.id);if(!el)return;el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('focus');setTimeout(()=>el.classList.remove('focus'),1600)}
+{const st=$('stage'),sel=$('sel');let a=null;
+  const pt=e=>{const r=$('src').getBoundingClientRect();return{x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))}};
+  const draw=(p,q)=>{sel.style.left=Math.min(p.x,q.x)*100+'%';sel.style.top=Math.min(p.y,q.y)*100+'%';sel.style.width=Math.abs(p.x-q.x)*100+'%';sel.style.height=Math.abs(p.y-q.y)*100+'%'};
+  st.onpointerdown=e=>{if(!srcC)return;a=pt(e);if(e.pointerType!=='touch'||drawMode){st.setPointerCapture(e.pointerId);sel.hidden=false;draw(a,a)}};
+  st.onpointermove=e=>{if(a&&(e.pointerType!=='touch'||drawMode))draw(a,pt(e))};
+  st.onpointercancel=()=>{a=null;sel.hidden=true};
+  st.onpointerup=e=>{if(!a)return;const q=pt(e),W=srcC.width,H=srcC.height;
+    const box={x:Math.min(a.x,q.x)*W,y:Math.min(a.y,q.y)*H,w:Math.abs(a.x-q.x)*W,h:Math.abs(a.y-q.y)*H};a=null;sel.hidden=true;
+    if(box.w<12||box.h<6){const p=[q.x*W,q.y*H],pad=Math.max(2,W/450)*3,rv=[...cards].reverse(),
+      hit=rv.find(c=>c._lab&&p[0]>=c._lab.x-pad&&p[0]<=c._lab.x+c._lab.w+pad&&p[1]>=c._lab.y-pad&&p[1]<=c._lab.y+c._lab.h+pad)||rv.find(c=>c.shape&&(c.shape.pts?inQ(p,c.shape.pts):inRot(p,c.shape)));if(hit)focusCard(hit);return}
+    if(e.pointerType==='touch'&&!drawMode)return;
+    const shape={x:box.x,y:box.y,w:box.w,h:box.h,ang:0};let card=target;
+    if(card){Object.assign(card,{status:'ocr',msg:'Reading title…',ocr:'',scry:null,url:'',dbg:'',confirmed:false,shape});target=null;drawMode=false;setHelp();paint(card)}
+    else{const t=document.createElement('canvas');t.width=box.w;t.height=Math.max(box.h,box.w/3);
+      t.getContext('2d').drawImage(srcC,box.x,box.y,box.w,box.h,0,0,t.width,box.h);card=addCard(t,shape)}
+    queue=queue.then(()=>analyze(card,srcC,[box],false))};
+  $('pcancel').onclick=()=>{target=null;drawMode=false;setHelp();drawOv()};
+  $('manualBtn').onclick=()=>openManual(null)}
+
+const inRot=(p,b)=>{const a=b.ang||0,dx=p[0]-(b.x+b.w/2),dy=p[1]-(b.y+b.h/2),c=Math.cos(a),s=Math.sin(a);
+  return Math.abs(dx*c+dy*s)<=b.w/2&&Math.abs(-dx*s+dy*c)<=b.h/2};
+const isTaken=p=>covered.some(q=>inQ(p,q))||taken.some(b=>inRot(p,b));
+const crop=(x,y,w,h)=>{const t=document.createElement('canvas');t.width=Math.max(1,Math.round(w));t.height=Math.max(1,Math.round(h));
+  t.getContext('2d').drawImage(srcC,x,y,w,h,0,0,t.width,t.height);return t};
+/* ---------- Title-bar finder: long parallel edges (card top edge + line under the title) ---------- */
+function bandPairs(src){
+  const m=cv.imread(src),g=new cv.Mat(),e=new cv.Mat(),ln=new cv.Mat(),D=Math.max(src.width,src.height),segs=[];
+  try{
+    cv.cvtColor(m,g,cv.COLOR_RGBA2GRAY);cv.GaussianBlur(g,g,new cv.Size(3,3),0);cv.Canny(g,e,60,160);
+    cv.HoughLinesP(e,ln,1,Math.PI/720,60,Math.round(D*.04),Math.round(D*.006));
+    for(let i=0;i<ln.rows;i++){
+      const x1=ln.data32S[i*4],y1=ln.data32S[i*4+1],x2=ln.data32S[i*4+2],y2=ln.data32S[i*4+3];
+      let th=Math.atan2(y2-y1,x2-x1);if(th>Math.PI/2)th-=Math.PI;if(th<-Math.PI/2)th+=Math.PI;
+      if(Math.abs(th)>.61)continue;
+      const c=Math.cos(th),s=Math.sin(th),a=x1*c+y1*s,b=x2*c+y2*s;
+      segs.push({th,rho:-x1*s+y1*c,t0:Math.min(a,b),t1:Math.max(a,b)})}
+  }finally{[m,g,e,ln].forEach(x=>x.delete())}
+  segs.sort((a,b)=>a.th-b.th);
+  const gap=D*.012,lines=[];
+  for(const s of segs){
+    const L=lines.find(L=>Math.abs(L.th-s.th)<.021&&Math.abs(L.rho-s.rho)<4&&s.t0<=L.t1+gap&&s.t1>=L.t0-gap);
+    if(L){L.t0=Math.min(L.t0,s.t0);L.t1=Math.max(L.t1,s.t1)}else lines.push({...s})}
+  const minL=D*.09,ls=lines.filter(L=>L.t1-L.t0>=minL),out=[];
+  for(let i=0;i<ls.length;i++)for(let j=i+1;j<ls.length;j++){
+    const A=ls[i],B=ls[j];if(Math.abs(A.th-B.th)>.044)continue;
+    const o0=Math.max(A.t0,B.t0),o1=Math.min(A.t1,B.t1),ov=o1-o0;
+    if(ov<minL||ov<.75*Math.min(A.t1-A.t0,B.t1-B.t0))continue;
+    const d=Math.abs(B.rho-A.rho);if(d<ov*.1||d>ov*.32)continue;
+    const[T,Bo]=A.rho<B.rho?[A,B]:[B,A],th=(A.th+B.th)/2,c=Math.cos(th),s=Math.sin(th),t=(o0+o1)/2,r=(T.rho+Bo.rho)/2;
+    out.push({th,top:T.rho,bot:Bo.rho,o0,o1,d,L:ov,cx:t*c-r*s,cy:t*s+r*c})}
+  out.sort((a,b)=>b.L-a.L);
+  const keep=[];
+  for(const p of out)if(!keep.some(q=>Math.hypot(q.cx-p.cx,q.cy-p.cy)<Math.max(.6*p.d,8)&&Math.abs(q.th-p.th)<.05))keep.push(p);
+  return keep}
+function warpBand(m,p,ext,trim){  /* straighten the band between the two lines */
+  const c=Math.cos(p.th),s=Math.sin(p.th),L=p.o1-p.o0,x0=p.o0-ext*L,x1=p.o1-trim*L,y0=p.top+.12*p.d,y1=p.bot-.08*p.d;
+  const P=(t,r)=>[t*c-r*s,t*s+r*c],S=Math.min(3,1800/(x1-x0)),w=Math.max(8,Math.round((x1-x0)*S)),h=Math.max(8,Math.round((y1-y0)*S));
+  const A=cv.matFromArray(4,1,cv.CV_32FC2,[...P(x0,y0),...P(x1,y0),...P(x1,y1),...P(x0,y1)]),
+    B=cv.matFromArray(4,1,cv.CV_32FC2,[0,0,w,0,w,h,0,h]),M=cv.getPerspectiveTransform(A,B),d=new cv.Mat();
+  cv.warpPerspective(m,d,M,new cv.Size(w,h),cv.INTER_CUBIC);
+  const out=document.createElement('canvas');cv.imshow(out,d);[A,B,M,d].forEach(x=>x.delete());return out}
+async function bandScan(){
+  let m=null;
+  try{
+    await namesReady.catch(()=>{});
+    if(!names.length)return;
+    status('Looking for title bars…');
+    const ps=bandPairs(srcC).filter(p=>!covered.some(q=>inQ([p.cx,p.cy],q))).slice(0,90),w=await worker();
+    m=cv.imread(srcC);
+    for(let i=0;i<ps.length;i++){const p=ps[i];
+      if(taken.some(b=>inRot([p.cx,p.cy],b)))continue;
+      const box={x:p.cx-p.L/2,y:p.cy-p.d/2,w:p.L,h:p.d,ang:p.th},mk={k:'x',...box};marks.push(mk);
+      status(`Checking title bar ${i+1} of ${ps.length}…`);
+      let best=null;
+      const attempt=async(ext,trim,mode)=>{
+        const band=warpBand(m,p,ext,trim),img=bin(band,mode),{data}=await w.recognize(img),r=bestMatch(clean(data.text)),sc=r.m?r.m.score:0;
+        if(!best||sc>best.sc)best={txt:r.txt,m:r.m,sc,band,img};return sc};
+      const sc=await attempt(-.04,.25,0);
+      if(sc<.8&&sc>=.35){await attempt(.1,.05,0);await attempt(-.04,.25,1);await attempt(.1,.05,1)}
+      if(best.sc<.8){const bm=cv.imread(best.band),lm=cv.mean(bm);bm.delete();   /* dark bar: probably light text */
+        if((lm[0]+lm[1]+lm[2])/3<130){await attempt(.5,.1,3);await attempt(-.04,.25,3);await attempt(.1,.05,3)}}
+      const nl=best.m?norm(best.txt).length:0;
+      if(!best.m||!(best.sc>=.78||(best.sc>=.65&&nl>=9))||nl<4)continue;
+      taken.push(box);mk.k='h';
+      const card=addCard(best.band,box);card.ocr=best.txt;card.dbg=best.img.toDataURL();await resolve(card,best.m.name,best.sc)}
+  }catch(e){console.error(e)}finally{if(m)m.delete()}}
+async function finish(){
+  if(!cards.length){showErr("No cards or titles were found, so the whole image is treated as one card. Use \u201cDraw a title box\u201d if the title isn't read.");
+    const c=addCard(srcC,{x:0,y:0,w:srcC.width,h:srcC.height,ang:0});await analyze(c,srcC,titleBoxes(srcC),true,true)}
+  drawOv()}
+
+/* ---------- Run ---------- */
+async function run(file){
+  if(!file)return;
+  cards=[];marks=[];taken=[];target=null;drawMode=false;selected=null;$('list').innerHTML='';showErr('');exportBar();
+  status('Loading image…');
+  try{srcC=await loadImage(file)}catch(e){srcC=null;$('manualBtn').disabled=true;status('');return showErr(e.message)}
+  $('manualBtn').disabled=false;
+  {const sc=$('src');sc.width=srcC.width;sc.height=srcC.height;sc.getContext('2d').drawImage(srcC,0,0);$('photo').hidden=false;setHelp();drawOv()}
+  namesReady=loadNames();namesReady.catch(e=>showErr(e.message));
+  try{status('Starting OpenCV…');await cvReady}catch(e){status('');return showErr(e.message)}
+  status('Looking for cards…');
+  let found=[];try{found=detect(srcC)}catch(e){console.error(e)}
+  covered=found.map(c=>c.vis).filter(Boolean);found.forEach(c=>{if(c.vis)marks.push({k:'q',pts:c.vis})});
+  for(const c of found){const card=addCard(c,c.vis?{pts:c.vis}:{x:0,y:0,w:srcC.width,h:srcC.height,ang:0});queue=queue.then(()=>analyze(card,c,titleBoxes(c),true))}
+  queue=queue.then(bandScan).then(finish);
+  worker().catch(e=>showErr("Couldn't load the OCR engine. Check your connection and reload."))}
+$('cam').onchange=$('file').onchange=e=>{run(e.target.files[0]);e.target.value=''};
+
+/* ---------- Export ---------- */
+function rows(){
+  const inc=$('inc').checked,map=new Map();
+  for(const c of cards){const un=!c.scry;if(un&&!inc)continue;if($('onlyc').checked&&!c.confirmed)continue;
+    const name=un?(c.name||c.ocr||'(unreadable)'):c.scry.name,k=(un?'?':'')+name.toLowerCase();let r=map.get(k);
+    if(!r)map.set(k,r={qty:0,name,set:un?'unmatched':c.scry.set_name,code:un?'':c.scry.set,cn:un?'':c.scry.collector_number,url:c.url||'',conf:1,status:un?'unmatched':'matched',ocr:c.ocr});
+    r.qty++;r.cf=(r.cf||0)+(c.confirmed?1:0);r.conf=Math.min(r.conf,c.score||0)}
+  return[...map.values()]}
+const esc=s=>/[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+function build(f){
+  const R=rows();
+  if(f==='json')return JSON.stringify({exported:new Date().toISOString(),cards:R.map(r=>({quantity:r.qty,confirmed:r.cf||0,name:r.name,set:r.set,setCode:r.code,collectorNumber:r.cn,gathererUrl:r.url,matchConfidence:+r.conf.toFixed(3),status:r.status,ocrText:r.ocr}))},null,2);
+  if(f==='txt')return R.map(r=>r.qty+' '+r.name+(r.status==='unmatched'?' # unmatched':'')).join('\n');
+  return['Quantity,Name,Set,Collector Number,Gatherer URL',...R.map(r=>[r.qty,esc(r.name),esc(r.set),esc(r.cn),esc(r.url)].join(','))].join('\r\n')}
+function exportBar(){
+  $('export').hidden=!cards.length;const R=rows();
+  $('count').textContent=R.reduce((n,r)=>n+r.qty,0)+' cards · '+R.length+' unique · '+cards.filter(c=>c.confirmed).length+' of '+cards.length+' confirmed'+(cards.some(c=>!c.scry)&&!$('inc').checked?' · unresolved cards left out':'');
+  $('dlBtn').disabled=$('cpBtn').disabled=!R.length}
+$('inc').onchange=$('onlyc').onchange=exportBar;
+$('dlBtn').onclick=()=>{
+  const f=$('fmt').value,text=build(f),mime={csv:'text/csv',txt:'text/plain',json:'application/json'}[f];
+  const blob=new Blob([f==='csv'?'\ufeff'+text:text],{type:mime+';charset=utf-8'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='mtg-cards-'+new Date().toLocaleDateString('en-CA')+'.'+f;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+$('cpBtn').onclick=async()=>{
+  const t=build('txt'),b=$('cpBtn');
+  try{await navigator.clipboard.writeText(t)}catch(e){const x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();document.execCommand('copy');x.remove()}
+  b.textContent='Copied';setTimeout(()=>b.textContent='Copy list',1500)};
+</script>
+</body>
+</html>
